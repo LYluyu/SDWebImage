@@ -248,13 +248,27 @@
         return [self.uirenderer imageWithActions:uiactions];
     } else {
 #endif
-        SDGraphicsBeginImageContextWithOptions(self.size, self.format.opaque, self.format.scale);
-        CGContextRef context = SDGraphicsGetCurrentContext();
-        if (actions) {
-            actions(context);
+        UIImage *image;
+        if (@available(iOS 17.0, *)) {
+            UIGraphicsImageRendererFormat *format = [[UIGraphicsImageRendererFormat alloc] init];
+            format.scale = self.format.scale;
+            format.opaque = self.format.opaque;
+            UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:self.size format:format];
+            
+            image = [renderer imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull rendererContext) {
+                if (actions) {
+                    actions(rendererContext.CGContext);
+                }
+            }];
+        } else {
+            SDGraphicsBeginImageContextWithOptions(self.size, self.format.opaque, self.format.scale);
+            CGContextRef context = SDGraphicsGetCurrentContext();
+            if (actions) {
+                actions(context);
+            }
+            image = SDGraphicsGetImageFromCurrentImageContext();
+            SDGraphicsEndImageContext();
         }
-        UIImage *image = SDGraphicsGetImageFromCurrentImageContext();
-        SDGraphicsEndImageContext();
         return image;
 #if SD_UIKIT
     }

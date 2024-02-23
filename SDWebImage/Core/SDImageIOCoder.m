@@ -95,9 +95,28 @@ static NSString * kSDCGImageDestinationRequestedFileSize = @"kCGImageDestination
     CGAffineTransform scaleTransform = CGAffineTransformMakeScale(xScale, yScale);
     CGAffineTransform transform = CGPDFPageGetDrawingTransform(page, box, drawRect, 0, preserveAspectRatio);
     
-    SDGraphicsBeginImageContextWithOptions(targetRect.size, NO, 0);
-    CGContextRef context = SDGraphicsGetCurrentContext();
+    if (@available(iOS 17.0, *)) {
+        UIGraphicsImageRendererFormat *format = [[UIGraphicsImageRendererFormat alloc] init];
+        format.scale = 0;
+        format.opaque = NO;
+        UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:targetRect.size format:format];
+        
+        image = [renderer imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull rendererContext) {
+            [self handleCreateBitmapPDFWithContext:rendererContext.CGContext targetRect:targetRect scaleTransform:scaleTransform transform:transform page:page];
+        }];
+    } else {
+        SDGraphicsBeginImageContextWithOptions(targetRect.size, NO, 0);
+        CGContextRef context = SDGraphicsGetCurrentContext();
+        [self handleCreateBitmapPDFWithContext:context targetRect:targetRect scaleTransform:scaleTransform transform:transform page:page];
+        image = SDGraphicsGetImageFromCurrentImageContext();
+        SDGraphicsEndImageContext();
+        CGPDFDocumentRelease(document);
+    }
     
+    return image;
+}
+
++ (void)handleCreateBitmapPDFWithContext:(CGContextRef)context targetRect:(CGRect)targetRect scaleTransform:(CGAffineTransform)scaleTransform transform:(CGAffineTransform)transform page:(CGPDFPageRef)page {
 #if SD_UIKIT || SD_WATCH
     // Core Graphics coordinate system use the bottom-left, UIKit use the flipped one
     CGContextTranslateCTM(context, 0, targetRect.size.height);
@@ -108,13 +127,6 @@ static NSString * kSDCGImageDestinationRequestedFileSize = @"kCGImageDestination
     CGContextConcatCTM(context, transform);
     
     CGContextDrawPDFPage(context, page);
-    
-    image = SDGraphicsGetImageFromCurrentImageContext();
-    SDGraphicsEndImageContext();
-    
-    CGPDFDocumentRelease(document);
-    
-    return image;
 }
 
 #pragma mark - Decode
